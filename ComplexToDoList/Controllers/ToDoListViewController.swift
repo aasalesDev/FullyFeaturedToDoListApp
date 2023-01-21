@@ -6,31 +6,35 @@
 //
 
 import UIKit
+import CoreData
 
 class ToDoListViewController: UITableViewController {
     
-    var itemArray = [Item]()
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathExtension("Items.plist")
+    @IBOutlet weak var searchBar: UISearchBar!
+    
+    var itemArray: [Item]? = [Item]()
+    //let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathExtension("Items.plist")
+    let context = (UIApplication.shared.delegate as? AppDelegate)?.persistentContainer.viewContext
+
+    // MARK: Life Cycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
         loadItems()
     }
     
+    // MARK: Method to load the tableview items
+    
     private func loadItems() {
-        if let dataPath = dataFilePath {
-            if let data = try? Data(contentsOf: dataPath) {
-                let decoder = PropertyListDecoder()
-                do {
-                    itemArray = try decoder.decode([Item].self, from: data)
-                } catch {
-                    print("Somthing went wrong in the load items function")
-                }
+        let request: NSFetchRequest<Item> = Item.fetchRequest()
+            do {
+                itemArray = try context?.fetch(request)
+            } catch {
+                print("Could not fetch data...")
             }
-        }
-        
     }
+    
+    // MARK: IBAction
     
     @IBAction func addButtonTapped(_ sender: UIBarButtonItem) {
         
@@ -39,43 +43,41 @@ class ToDoListViewController: UITableViewController {
         let alert = UIAlertController(title: "New ToDo Item", message: "Enter a new item to your list", preferredStyle: .alert)
         let action = UIAlertAction(title: "Add Item", style: .default) { action in
             
-            let newItem = Item()
-            // This is to unwrap the optional text from the textField
-            if let title = textField.text {
-                newItem.title = title
-                newItem.done = false
-                self.itemArray.append(newItem)
+            // This is to create the variable of type NSContext that will be used to save data in the database...
+            if let context = (UIApplication.shared.delegate as? AppDelegate)?.persistentContainer.viewContext {
+                let newItem = Item(context: context)
                 
-                self.saveItems()
+                // This is to unwrap the optional text from the textField
+                if let title = textField.text {
+                    newItem.title = title
+                    newItem.done = false
+                    self.itemArray?.append(newItem)
+                    self.saveItems()
+                }
             }
         }
         
         alert.addTextField { alertTextField in
             alertTextField.placeholder = "Create new item"
             textField = alertTextField
-            
         }
-        
         alert.addAction(action)
         present(alert, animated: true)
     }
     
+    // MARK: Save data to Core Data
+    
+    // This is like a staging area, similar to commit in git
     private func saveItems() {
-        
-        let encoder = PropertyListEncoder()
-        
         do {
-            let data = try encoder.encode(itemArray)
-            if let path = dataFilePath {
-                try data.write(to: path)
+            if let context = (UIApplication.shared.delegate as? AppDelegate)?.persistentContainer.viewContext {
+                try context.save()
             }
         } catch {
-            print("Could not encode data...")
+            print("Could not save context...")
         }
-        
         tableView.reloadData()
     }
-    
 }
 
 extension ToDoListViewController {
@@ -83,17 +85,17 @@ extension ToDoListViewController {
     // MARK: TableView DataSource Methods
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return itemArray.count 
+        return itemArray?.count ?? 0
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
                 
-        let item = itemArray[indexPath.row]
-        cell.textLabel?.text = item.title
+        let item = itemArray?[indexPath.row]
+        cell.textLabel?.text = item?.title
         
         // This line of code replaces the if else block below
-        cell.accessoryType = item.done ? .checkmark : .none
+        cell.accessoryType = item?.done ?? false ? .checkmark : .none
         
         /*if itemArray[indexPath.row].done == true {
             cell.accessoryType = .checkmark
@@ -108,14 +110,19 @@ extension ToDoListViewController {
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         
+        // MARK: UPDATE ITEMS
         // This line of code replaces the if else block below
-        itemArray[indexPath.row].done = !itemArray[indexPath.row].done
+        itemArray?[indexPath.row].done = !(itemArray?[indexPath.row].done ?? false)
         
         /*if itemArray[indexPath.row].done == false {
             itemArray[indexPath.row].done = true
         } else {
             itemArray[indexPath.row].done = false
         }*/
+        
+        /// MARK: DELETE ITEMS
+        /*context?.delete(itemArray?[indexPath.row] ?? Item())
+        itemArray?.remove(at: indexPath.row)*/
         
         saveItems()
         
